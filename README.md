@@ -80,14 +80,18 @@ picorv32_mlp_soc/
 
 ## Quickstart
 
-### 1. Build Firmware (Ubuntu / WSL)
+### 1. Trained model MLP
+
+[kaggle training model](https://www.kaggle.com/code/tdngvntin/training-mlp)
+
+### 2. Build Firmware (Ubuntu / WSL)
 Requires `gcc-riscv64-unknown-elf` or `gcc-riscv32-unknown-elf`:
 ```bash
 cd firmware
 bash build.sh ../data/images/img_106.jpg
 ```
 
-### 2. Run Simulation (Vivado xsim)
+### 3. Run Simulation (Vivado xsim)
 ```bash
 # Run standalone MMIO & accelerator testbench
 make sim_case3
