@@ -1,0 +1,104 @@
+====================================================================================================
+MNIST MLP TRAINING, QUANTIZATION & BRAM WEIGHT PACKING — REPORT SUMMARY
+====================================================================================================
+Source Files:
+  - Training & Quantization Script : E:/SOC_LAB/write_by_myself/mlp.py
+  - Golden Fixed-Point Reference   : E:/SOC_LAB/write_by_myself/soc_gcc/pack_cpu_coe.py
+  - RTL Hardware Accelerator       : E:/SOC_LAB/write_by_myself/mlp_acc_bao.v
+  - Weight BRAM Init File          : E:/SOC_LAB/final_project/final_project.ip_user_files/mem_init_files/bram_init_adat.coe
+====================================================================================================
+
+STEP 1: DATASET PREPARATION & PREPROCESSING
+----------------------------------------------------------------------------------------------------
+1. Dataset:
+   - Standard MNIST handwritten digit dataset (0..9) loaded via `tensorflow.keras.datasets.mnist`:
+     * Training set : 60,000 grayscale images (28 x 28 pixels, 8-bit unsigned [0..255])
+     * Test set     : 10,000 grayscale images (28 x 28 pixels, 8-bit unsigned [0..255])
+2. Reproducibility Seed:
+   - Fixed random seed (`SEED = 42`) applied across `numpy`, Python `random`, `tensorflow`, and
+     `PYTHONHASHSEED` so trained weights match RTL verification deterministically.
+3. Input Normalization & Label Encoding:
+   - Pixel intensities are normalized from 8-bit unsigned integers `p in [0, 255]` to floating-point
+     values in `[0.0, 1.0]` (`p / 255.0` in the Q15 flow of `bram_init_adat.coe`, or `p / 256.0` in
+     the Q8.8 flow of `mlp.py`).
+   - Ground-truth labels (`0..9`) are one-hot encoded into 10-element vectors using `to_categorical`.
+
+STEP 2: MLP NETWORK ARCHITECTURE (784 -> 64 -> 10)
+----------------------------------------------------------------------------------------------------
+The Multi-Layer Perceptron (MLP) is built using TensorFlow/Keras `Sequential`:
+  1. Input Layer (`Flatten`):
+     - Flattens each `28 x 28` image into a 1D vector of `784` features (`x[0..783]`).
+  2. Hidden Layer (`Dense(64, activation='relu')`):
+     - `64` fully connected neurons with ReLU activation: `h_j = max(0, sum_{i=0}^{783} x_i * W1_{i,j} + b1_j)`.
+     - Parameters: `W1` (`784 x 64 = 50,176` weights) + `b1` (`64` biases) = `50,240` parameters.
+  3. Regularization (`Dropout(0.1)`):
+     - Active only during training (10% dropout rate) to prevent overfitting on the 60,000 training images.
+  4. Output Layer (`Dense(10, activation=None)`):
+     - `10` linear output nodes producing raw class logits `z_k = sum_{j=0}^{63} h_j * W2_{j,k} + b2_k` (`k = 0..9`).
+     - Softmax is omitted during hardware inference because `argmax(z_0 .. z_9)` is invariant to monotonic
+       scaling, eliminating exponential/division hardware in RTL.
+     - Parameters: `W2` (`64 x 10 = 640` weights) + `b2` (`10` biases) = `650` parameters.
+  * Total Trainable Parameters: `50,890` parameters (`50,816` weights + `74` biases).
+
+STEP 3: TRAINING CONFIGURATION & HYPERPARAMETERS
+----------------------------------------------------------------------------------------------------
+  - Loss Function : `CategoricalCrossentropy(from_logits=True)` (numerically stable cross-entropy on raw logits)
+  - Optimizer     : `Adam` (adaptive moment estimation)
+  - Batch Size    : `128` images per mini-batch
+  - Epochs        : `10` epochs with validation evaluated on all `10,000` MNIST test images
+  - Accuracy      : ~97.5% - 98.0% on the 10,000-image MNIST test set
+
+STEP 4: POST-TRAINING FIXED-POINT QUANTIZATION FOR FPGA HARDWARE
+----------------------------------------------------------------------------------------------------
+To map floating-point parameters onto Zynq-7000 DSP48E1 slices and Block RAM without floating-point units,
+post-training uniform quantization is applied (`pack_cpu_coe.py` / `mlp_acc_bao.v` active SoC flow):
+  1. Input Pixel Normalization (8-bit UInt -> 16-bit Signed Q15):
+     - `x_q15[i] = (p[i] * 32768 + 127) // 255`
+     - In RTL (`mlp_acc_bao.v`), this is implemented without any divider using the exact identity:
+       `x_q15[i] = ((p[i] << 8) + p[i] + 1) >> 1` (100% bit-identical for all `p in 0..255`).
+  2. Layer-1 Weights & Biases:
+     - `W1` quantized to 16-bit signed fixed-point **Q15** (`int16`, scaled by `2^15 = 32,768`).
+     - `B1` quantized to 32-bit signed fixed-point **Q30** (`int32`, matching the `Q15 * Q15 = Q30` MAC product).
+  3. Layer-1 Accumulation, ReLU & Scaling (Q30 -> Q16):
+     - 44-bit signed accumulator `acc1` sums `784` products (`x_q15 * W1_q15`) and adds `B1_q30`.
+     - ReLU and arithmetic right-shift by 14 (`>>> 14`) produce 25-bit signed **Q16** hidden activations:
+       `h_q16[j] = max(0, acc1 + B1_q30) >>> 14`.
+  4. Layer-2 Weights, Biases & Output Logits (Q16 * Q15 -> Q31 -> Q17):
+     - `W2` quantized to 16-bit signed **Q15** (`int16`); `B2` quantized to 32-bit signed **Q31** (`int32`).
+     - 56-bit signed accumulator `acc2` sums `64` products (`h_q16 * W2_q15`, which is `Q31`) and adds `B2_q31`.
+     - Arithmetic right-shift by 14 (`>>> 14`) produces 32-bit signed **Q17** output logits:
+       `logit[k] = (acc2 + B2_q31) >>> 14` (`k = 0..9`).
+  5. Hardware Argmax Classification:
+     - Sequential scan (`ARGMAX_INIT` -> `ARGMAX_SCAN`) compares `logit[0..9]` and outputs the 4-bit class index
+       `result_class = argmax_k(logit[k])`.
+
+STEP 5: 2-LANE WEIGHT PACKING INTO 32-BIT BRAM (`bram_init_adat.coe`)
+----------------------------------------------------------------------------------------------------
+Because the RTL accelerator (`mlp_acc_bao.v`) computes 2 MAC lanes in parallel per clock cycle (`i_count` and
+`i_count + 1` in Layer 1; `i2_count` and `i2_count + 1` in Layer 2), two 16-bit signed weights are packed into
+each 32-bit BRAM word:
+  - Bits `[15:0]`  : Even index weight (`i` or `j`)
+  - Bits `[31:16]` : Odd index weight (`i + 1` or `j + 1`)
+
+Weight BRAM (`blk_mem_gen_1`, 25,482 x 32-bit words = ~99.5 KB) Address Map:
+  +-------------------+------------------+--------------+-----------------------------------------------+
+  | Tensor / Region   | Word Address     | Word Count   | Organization / Packing                        |
+  +-------------------+------------------+--------------+-----------------------------------------------+
+  | Layer-1 Weights   |     0 .. 25,087  | 25,088 words | `(i // 2) * 64 + h`: 2 INT16 weights/word     |
+  | Layer-1 Biases    | 25,088 .. 25,151 |     64 words | `25088 + h`: 1 INT32 Q30 bias/word            |
+  | Layer-2 Weights   | 25,152 .. 25,471 |    320 words | `25152 + (j // 2) * 10 + o`: 2 INT16/word     |
+  | Layer-2 Biases    | 25,472 .. 25,481 |     10 words | `25472 + o`: 1 INT32 Q31 bias/word            |
+  +-------------------+------------------+--------------+-----------------------------------------------+
+  | TOTAL             |     0 .. 25,481  | 25,482 words | Stored in 50 RAMB36E1 tiles (`blk_mem_gen_1`) |
+  +-------------------+------------------+--------------+-----------------------------------------------+
+
+STEP 6: BIT-ACCURATE SOFTWARE VERIFICATION & EXPORT
+----------------------------------------------------------------------------------------------------
+Before running Vivado `xsim`, the Python golden model (`reference()` in `pack_cpu_coe.py` and step 4 of `mlp.py`)
+emulates the exact fixed-point integer arithmetic of the RTL:
+  - Exports `.coe` / `.mif` / `.mem` files for Vivado Block Memory Generator (`blk_mem_gen_0` and `blk_mem_gen_1`).
+  - Exports `expected_hidden.mem`, `expected_logits.mem`, `expected_result.mem`, and `manifest.json`.
+  - Generates evaluation plots (`training_curves.png`, `confusion_matrix.png`, `sample_predictions.png`).
+  - Verified 100% bit-exact agreement (0 ULP error across all 10 output logits) between Python Golden Model
+    and Vivado `xsim` RTL simulation across Test Case 1 and Test Case 2.
+====================================================================================================

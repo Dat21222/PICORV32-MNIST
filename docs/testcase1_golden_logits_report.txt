@@ -1,0 +1,47 @@
+========================================================================================
+TEST CASE 1: GOLDEN MODEL vs. RTL HARDWARE OUTPUT LAYER LOGITS (10 NODES)
+========================================================================================
+Testbench File        : E:/SOC_LAB/write_by_myself/tb_case1_single_image.v
+Firmware & Image File : E:/SOC_LAB/write_by_myself/soc_gcc/build/bram_cpu.coe
+Active Weight BRAM    : bram_init_adat.coe (final_wrapper_blk_mem_gen_1_0.mif)
+Golden Model Function : reference() in E:/SOC_LAB/write_by_myself/soc_gcc/pack_cpu_coe.py
+Fixed-Point Format    : Signed 32-bit Q17 ((sum(h_Q16 * W2_Q15) + B2_Q31) >>> 14)
+Predicted Class       : Class 3 (Argmax = Node 3, Logit = +486,813)
+Golden vs. RTL Match  : 100% Bit-Exact Match (0 difference across all 10 output nodes)
+========================================================================================
+
+1. TEST CASE 1 ACTIVE SIMULATION (bram_cpu.coe + bram_init_adat.coe)
+--------------------------------------------------------------------------------------------------------
+Node (Class) | Golden Logit (Dec) | Golden Logit (Hex) | Golden (Float Q17) | RTL Logit (Dec) | RTL Logit (Hex) | Diff
+--------------------------------------------------------------------------------------------------------
+logit[0]     |            -489666 |         0xFFF8873E |          -3.735855 |         -489666 |      0xFFF8873E |    0
+logit[1]     |             -21156 |         0xFFFFAD5C |          -0.161407 |          -21156 |      0xFFFFAD5C |    0
+logit[2]     |              89176 |         0x00015C58 |          +0.680359 |           89176 |      0x00015C58 |    0
+logit[3]     |             486813 |         0x00076D9D |          +3.714088 |          486813 |      0x00076D9D |    0  <-- MAX (Predicted Class = 3)
+logit[4]     |           -1307134 |         0xFFEC0E02 |          -9.972641 |        -1307134 |      0xFFEC0E02 |    0
+logit[5]     |             450273 |         0x0006DEE1 |          +3.435310 |          450273 |      0x0006DEE1 |    0
+logit[6]     |            -509792 |         0xFFF838A0 |          -3.889404 |         -509792 |      0xFFF838A0 |    0
+logit[7]     |             281403 |         0x00044B3B |          +2.146935 |          281403 |      0x00044B3B |    0
+logit[8]     |            -288184 |         0xFFFB9A48 |          -2.198669 |         -288184 |      0xFFFB9A48 |    0
+logit[9]     |            -415446 |         0xFFF9A92A |          -3.169601 |         -415446 |      0xFFF9A92A |    0
+--------------------------------------------------------------------------------------------------------
+Argmax Result: Golden Model = 3 | RTL Hardware (result_class) = 3 | CPU Mailbox (0x2000) = 3 | STATUS = PASS
+
+
+2. ADDITIONAL GOLDEN MODEL REFERENCES (FOR REPORT COMPARISON)
+--------------------------------------------------------------------------------------------------------------------
+Node     | TC1 (bram_cpu.coe + bram_init_adat.coe) | TC1 (bram_cpu.coe + weights_original.coe) | MNIST img_106.jpg + bram_init_adat.coe
+--------------------------------------------------------------------------------------------------------------------
+logit[0] |                 -489666 (0xFFF8873E)    |                   -189540 (0xFFFD1B9C)    |                -272531 (0xFFFBDAAD)
+logit[1] |                  -21156 (0xFFFFAD5C)    |                   -170829 (0xFFFD64B3)    |                -191611 (0xFFFD1385)
+logit[2] |                   89176 (0x00015C58)    |                    223069 (0x0003675D)    |                -120243 (0xFFFE2A4D)
+logit[3] |                  486813 (0x00076D9D) *  |                    598731 (0x000922CB) *  |                 255555 (0x0003E643) *
+logit[4] |                -1307134 (0xFFEC0E02)    |                  -1663457 (0xFFE69E1F)    |                -230297 (0xFFFC7C67)
+logit[5] |                  450273 (0x0006DEE1)    |                    467380 (0x000721B4)    |                 -44008 (0xFFFF5418)
+logit[6] |                 -509792 (0xFFF838A0)    |                   -285171 (0xFFFBA60D)    |                -320701 (0xFFFB1B43)
+logit[7] |                  281403 (0x00044B3B)    |                    238529 (0x0003A3C1)    |                 -66942 (0xFFFEFA82)
+logit[8] |                 -288184 (0xFFFB9A48)    |                     34819 (0x00008803)    |                 -43494 (0xFFFF561A)
+logit[9] |                 -415446 (0xFFF9A92A)    |                   -130233 (0xFFFE0347)    |                 -56565 (0xFFFF230B)
+--------------------------------------------------------------------------------------------------------------------
+Argmax   |                         Class 3         |                           Class 3         |                        Class 3
+========================================================================================

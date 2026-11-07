@@ -1,0 +1,34 @@
+# Vivado / EDA Artifacts
+.Xil/
+*.jou
+*.log
+*.pb
+*.dcp
+*.wdb
+*.vcd
+*.str
+*.tmp
+hd_visual/
+xsim.dir/
+.bxl/
+*.wcfg.bak
+
+# Compilation & Build outputs
+*.o
+*.elf
+*.bin.bak
+*.dis
+*.map
+build/
+build_multi3/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini

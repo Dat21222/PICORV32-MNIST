@@ -1,0 +1,173 @@
+====================================================================================================
+VIVADO 2022.2 POST-IMPLEMENTATION REPORT SUMMARY (ROUTED DESIGN)
+====================================================================================================
+Project / Top Module : final_project / final_wrapper_wrapper
+Target Device        : Xilinx Zynq-7000 xc7z020clg484-1 (Speed Grade -1, Commercial)
+Implementation Date  : Fri Nov 6, 2026 (11:22:50)
+Design State         : Fully Placed & Routed (100% nets routed, 0 routing errors)
+Timing Status        : MET (All user-specified timing constraints met at 100.0 MHz)
+====================================================================================================
+
+1. OVERALL RESOURCE UTILIZATION (POST-IMPLEMENTATION / PLACED & ROUTED)
+----------------------------------------------------------------------------------------------------
+Source: E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_utilization_placed.rpt
+----------------------------------------------------------------------------------------------------
+Resource Category             |   Used | Available | Utilization (%) | Notes
+------------------------------+--------+-----------+-----------------+------------------------------
+Slice LUTs (Total)            |  2,314 |    53,200 |           4.35% | Down from 2,407 post-synth
+  - LUT as Logic              |  1,889 |    53,200 |           3.55% | Combinational logic
+  - LUT as Distributed RAM    |    424 |    17,400 |           2.44% | x_mem, h_mem, cpuregs
+  - LUT as Shift Register     |      1 |    17,400 |          <0.01% | SRL16E in rst_ps7_0_50M
+Slice Registers (Total FFs)   |  1,301 |   106,400 |           1.22% | 1,283 FDRE + 18 FDSE, 0 Latch
+Occupied Slices               |    789 |    13,300 |           5.93% | 552 SLICEL + 237 SLICEM
+F7 Muxes                      |     64 |    26,600 |           0.24% | BRAM read multiplexing
+F8 Muxes                      |     32 |    13,300 |           0.24% | BRAM read multiplexing
+CARRY4 Chains                 |    172 |    13,300 |           1.29% | Fast carry arithmetic
+Block RAM Tiles (RAMB36E1)    |     66 |       140 |          47.14% | 16 CPU BRAM + 50 Weight BRAM
+  - RAMB36E1                  |     66 |       140 |          47.14% | 2376 Kb total BRAM capacity
+  - RAMB18E1                  |      0 |       280 |           0.00% | None used
+DSP Blocks (DSP48E1)          |      4 |       220 |           1.82% | 2 in Layer-1, 2 in Layer-2
+Bonded IOB (PL User Pins)     |      4 |       200 |           2.00% | result[3:0] output pins
+Bonded IOPADs (PS7 Fixed I/O) |    130 |       130 |         100.00% | DDR3 + MIO + PS_CLK/PORB/SRSTB
+Global Clock Buffers (BUFG)   |      1 |        32 |           3.13% | FCLK_CLK0 (100 MHz)
+Unique Control Sets           |     63 |    13,300 |           0.47% | Well below 7.5% guideline
+Zynq PS7 Hard Processor Block |      1 |         1 |         100.00% | ARM Cortex-A9 PS7 instance
+----------------------------------------------------------------------------------------------------
+
+
+2. HIERARCHICAL UTILIZATION BY SUBMODULE (POST-ROUTE)
+----------------------------------------------------------------------------------------------------
+Source: E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_utilization_hierarchical_routed.rpt
+----------------------------------------------------------------------------------------------------
+Instance (Module)                   | Total LUTs | Logic LUTs | LUTRAMs | SRLs |   FFs | RAMB36 | DSP48E1
+------------------------------------+------------+------------+---------+------+-------+--------+--------
+final_wrapper_wrapper (TOP)         |      2,314 |      1,889 |     424 |    1 | 1,301 |     66 |       4
+  +- mlp_acc_0 (mlp_acc)            |      1,109 |        729 |     380 |    0 |   676 |      0 |       4
+  +- picorv32_wrapper_0             |        905 |        861 |      44 |    0 |   574 |      0 |       0
+  |    +- cpu (picorv32)            |        894 |        850 |      44 |    0 |   574 |      0 |       0
+  |    +- wrapper glue              |         11 |         11 |       0 |    0 |     0 |      0 |       0
+  +- blk_mem_gen_1 (Weight BRAM)    |        135 |        135 |       0 |    0 |     5 |     50 |       0
+  +- interconnect_0 (interconnect)  |         74 |         74 |       0 |    0 |     3 |      0 |       0
+  +- mmio_mlp_0 (mmio_mlp)          |         39 |         39 |       0 |    0 |    15 |      0 |       0
+  +- blk_mem_gen_0 (CPU BRAM)       |         35 |         35 |       0 |    0 |     2 |     16 |       0
+  +- rst_ps7_0_50M (proc_sys_reset) |         14 |         13 |       0 |    1 |    25 |      0 |       0
+  +- bram_controller_0              |          4 |          4 |       0 |    0 |     1 |      0 |       0
+  +- processing_system7_0 (PS7)     |          0 |          0 |       0 |    0 |     0 |      0 |       0
+----------------------------------------------------------------------------------------------------
+Note on Distributed RAM (LUTRAM) & DSP48E1 Mapping (from synth_1/runme.log):
+  - mlp_acc_0/inst/x_mem_reg : 1024 x 8-bit input buffer mapped to 78 x RAM64M (312 RAMD64E)
+  - mlp_acc_0/inst/h_mem_reg : 64 x 25-bit Q16 hidden buffer mapped to 18 x RAM64M (68 RAMD64E)
+  - picorv32/cpuregs_reg     : 32 x 32-bit register file mapped to 10 x RAM32M + 4 x RAM32X1D
+  - mlp_acc_0 DSP48E1 (#1)   : l1_prod_a_reg (16x18 -> 33-bit Q30 product, PREG=1)
+  - mlp_acc_0 DSP48E1 (#2)   : l1_pair_reg / l1_prod_b_reg (C + (A*B)' -> 34-bit Q30 pair sum, MREG=1, PREG=1)
+  - mlp_acc_0 DSP48E1 (#3)   : l2_prod_a_reg (25x16 -> 41-bit Q31 product, PREG=1)
+  - mlp_acc_0 DSP48E1 (#4)   : l2_prod_b_reg (25x16 -> 41-bit Q31 product, PREG=1)
+
+
+3. TIMING SUMMARY & CRITICAL PATH ANALYSIS (POST-ROUTE)
+----------------------------------------------------------------------------------------------------
+Source: E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_timing_summary_routed.rpt
+----------------------------------------------------------------------------------------------------
+Clock Domain        : clk_fpga_0 (PS7 FCLK_CLK0)
+Clock Constraint    : Period = 10.000 ns (Target Frequency = 100.000 MHz, 50% duty cycle)
+Timing Verification : ALL CONSTRAINTS MET (0 failing endpoints)
+
+Metric                         |     Value | Failing Endpoints | Total Endpoints | Status
+-------------------------------+-----------+-------------------+-----------------+--------
+Worst Negative Slack (WNS)     | +0.323 ns |                 0 |           7,790 | MET
+Total Negative Slack (TNS)     |  0.000 ns |                 0 |           7,790 | MET
+Worst Hold Slack (WHS)         | +0.087 ns |                 0 |           7,790 | MET
+Total Hold Slack (THS)         |  0.000 ns |                 0 |           7,790 | MET
+Worst Pulse Width Slack (WPWS) | +3.750 ns |                 0 |           1,907 | MET
+Total Pulse Width Slack (TPWS) |  0.000 ns |                 0 |           1,907 | MET
+
+Maximum Achievable Clock Period & Frequency:
+  - Minimum Clock Period (T_min) = 10.000 ns - 0.323 ns = 9.677 ns
+  - Maximum Operating Frequency (F_max) = 1 / 9.677 ns = 103.34 MHz
+
+Critical Setup Path (Worst Max Delay Path):
+  - Slack          : +0.323 ns (MET)
+  - Source         : final_wrapper_i/mlp_acc_0/inst/i_count_reg[1]/C (FDRE, SLICE_X23Y25)
+  - Destination    : final_wrapper_i/mlp_acc_0/inst/l1_prod_a_reg/A[14] (DSP48E1, DSP48_X1Y11)
+  - Data Path Delay: 5.662 ns (Logic = 1.693 ns [29.9%], Routing = 3.969 ns [70.1%])
+  - Logic Levels   : 7 (1x RAMD64E read from x_mem + 2x LUT6 + 4x CARRY4 for Q15 pixel normalization)
+  - DSP Setup Time : 3.900 ns (DSP48E1 Setup_dsp48e1_CLK_A when AREG=0)
+  - Explanation    : Reading 8-bit pixel x_mem[i_count], computing Q15 normalization ((p<<8)+p+1)>>1
+                     via CARRY4 adder chain, and feeding directly into DSP48E1 A-port (unregistered AREG=0).
+
+Critical Hold Path (Worst Min Delay Path):
+  - Slack          : +0.087 ns (MET)
+  - Source         : final_wrapper_i/picorv32_wrapper_0/inst/cpu/latched_rd_reg[1]/C (FDSE, SLICE_X65Y27)
+  - Destination    : final_wrapper_i/picorv32_wrapper_0/inst/cpu/cpuregs_reg_r2_0_31_18_23/RAMA/WADR1 (RAMD32, SLICE_X66Y27)
+  - Data Path Delay: 0.409 ns (Logic = 0.141 ns [34.5%], Routing = 0.268 ns [65.5%], 0 Logic Levels)
+
+
+4. POWER ANALYSIS (POST-ROUTE)
+----------------------------------------------------------------------------------------------------
+Source: E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_power_routed.rpt
+----------------------------------------------------------------------------------------------------
+Total On-Chip Power       : 1.728 W
+  - Dynamic Power         : 1.581 W (91.5% of total power)
+  - Device Static Power   : 0.147 W ( 8.5% of total power)
+Thermal Characteristics   :
+  - Ambient Temperature   : 25.0 deg C
+  - Junction Temperature  : 44.9 deg C
+  - Effective ThetaJA     : 11.5 deg C/W
+  - Max Ambient Temp      : 65.1 deg C
+
+Dynamic Power Breakdown by Component / Hierarchy:
+  - Zynq PS7 Hard Block   : 1.558 W (98.5% of dynamic power)
+  - Programmable Logic PL : 0.023 W ( 1.5% of dynamic power, only 23 mW!)
+      * Clocks            : 0.008 W (8 mW)
+      * Signals/Routing   : 0.005 W (5 mW)
+      * Slice Logic/LUTs  : 0.004 W (4 mW)
+      * Block RAM (66)    : 0.003 W (3 mW)
+      * DSP48E1 (4)       : 0.002 W (2 mW)
+      * I/O (result[3:0]) : 0.000 W (<1 mW)
+
+PL Dynamic Power by Module Hierarchy:
+  - mlp_acc_0             : 0.011 W (11 mW)
+  - picorv32_wrapper_0    : 0.006 W ( 6 mW)
+  - blk_mem_gen_1         : 0.004 W ( 4 mW)
+  - Remaining PL modules  : 0.002 W ( 2 mW)
+
+
+5. DRC, METHODOLOGY & ROUTING STATUS REPORTS
+----------------------------------------------------------------------------------------------------
+Sources:
+  - E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_drc_routed.rpt
+  - E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_methodology_drc_routed.rpt
+  - E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_route_status.rpt
+  - E:/SOC_LAB/final_project/final_project.runs/impl_1/final_wrapper_wrapper_io_placed.rpt
+----------------------------------------------------------------------------------------------------
+A. Routing Status:
+   - Total Logical Nets           : 5,777
+   - Routable Nets                : 3,999
+   - Fully Routed Nets            : 3,999 (100.0%)
+   - Unrouted / Partially Routed  : 0
+   - Nets with Routing Errors     : 0
+   - Global Vertical Congestion   : 1.14%
+   - Global Horizontal Congestion : 1.89%
+
+B. Design Rule Check (DRC) Summary (0 Errors, 2 Critical Warnings, 12 Warnings):
+   - [NSTD-1] Critical Warning (1):
+     Ports `result[3:0]` use `DEFAULT` I/O standard (auto-assigned `LVCMOS18*` in Bank 13) instead
+     of an explicit `set_property IOSTANDARD` constraint in an `.xdc` file.
+   - [UCIO-1] Critical Warning (1):
+     Ports `result[3:0]` have no user-assigned package pin (`PACKAGE_PIN` / `LOC`) constraint
+     (auto-placed by Vivado on Bank 13 pins: `result[0]=U7`, `result[1]=W5`, `result[2]=W6`, `result[3]=W7`).
+     *Note:* Before running `write_bitstream` for a physical board (e.g. ZedBoard LEDs), assign
+     `PACKAGE_PIN` and `IOSTANDARD LVCMOS33` in an `.xdc` constraint file.
+   - [DPIP-1] Warning (9):
+     DSP48E1 input ports A/B/C in `mlp_acc_0` (`l1_prod_a_reg`, `l1_pair_reg`, `l2_prod_a_reg`, `l2_prod_b_reg`)
+     do not use internal DSP input pipeline registers (`AREG=0`, `BREG=0`, `CREG=0`).
+   - [DPOP-2] Warning (3):
+     DSP48E1 multiplier stage (`MREG=0`) in `l1_prod_a_reg`, `l2_prod_a_reg`, `l2_prod_b_reg` uses only `PREG=1`
+     because the FSM performs a single-cycle `L1_MUL` / `L2_MUL` state.
+
+C. Methodology DRC Summary (0 Errors, 0 Critical Warnings, 4 Warnings):
+   - [TIMING-18] Warning (4):
+     Missing `set_output_delay` constraint on `result[3:0]` relative to `clk_fpga_0`. Since `result[3:0]`
+     is a static status output (typically driving board LEDs), it is asynchronous to external clocks and
+     has no impact on internal synchronous timing.
+====================================================================================================

@@ -1,0 +1,173 @@
+================================================================================
+         VERIFICATION SUMMARY: 3 TESTBENCHES FOR ZYNQ + PICORV32 + MLP SOC
+================================================================================
+Project Workspace : E:\SOC_LAB\write_by_myself
+Vivado Project    : E:\SOC_LAB\final_project
+Simulator         : Xilinx Vivado Simulator (xsim v2022.2)
+Clock Frequency   : 100 MHz PL Clock (10 ns period)
+Original Testbench: tb_soc_system.v (kept unchanged)
+
+--------------------------------------------------------------------------------
+1. OVERVIEW OF THE 3 EXPORTED TESTBENCHES
+--------------------------------------------------------------------------------
++-------------+-------------------------+----------------------------------+------------------+--------------------+--------+
+| Test Case   | Testbench File          | Top Module / DUT                 | Sim Time (ns)    | Predicted / Result | Status |
++-------------+-------------------------+----------------------------------+------------------+--------------------+--------+
+| Test Case 1 | tb_case1_single_image.v | final_wrapper_wrapper (Full SoC) | 1,558,425 ns     | Class 3 (Exp: 3)   | PASS   |
+| Test Case 2 | tb_case2_multi_image.v  | final_wrapper_wrapper (Full SoC) | 4,670,325 ns     | [3, 0, 7] (100%)   | PASS   |
+| Test Case 3 | tb_case3_mmio_protocol.v| mmio_mlp + mlp_acc               |    17,925 ns     | 0 Protocol Errors  | PASS   |
++-------------+-------------------------+----------------------------------+------------------+--------------------+--------+
+
+--------------------------------------------------------------------------------
+2. SOC & MMIO MEMORY MAP REFERENCE
+--------------------------------------------------------------------------------
+- CPU BRAM (blk_mem_gen_0) : 0x0000_0000 - 0x0000_FFFF (64 KiB, 1-cycle read latency)
+  * 0x0000_0000 - 0x0000_0FFF : RISC-V Firmware (.text, .rodata, .data, .bss)
+  * 0x0000_1000 - 0x0000_130F : Image #0 (784 bytes)
+  * 0x0000_1400 - 0x0000_170F : Image #1 (784 bytes, used in Test Case 2)
+  * 0x0000_1800 - 0x0000_1B0F : Image #2 (784 bytes, used in Test Case 2)
+  * 0x0000_2000 - 0x0000_200C : CPU Result & Completion Mailboxes
+  * 0x0000_F000 - 0x0000_FFFF : CPU Stack (SP initialized to 0x0001_0000)
+
+- MLP MMIO Registers (mmio_mlp_bao.v, Base = 0x1000_0000):
+  * 0x1000_0000 (ADDR_CONTROL)     : bit[0] = acc_start, bit[1] = acc_clear
+  * 0x1000_0004 (ADDR_STATUS)      : bit[0] = acc_busy, bit[1] = done_latched,
+                                     bit[2] = can_accept_pixel, bit[3] = input_full
+  * 0x1000_0008 (ADDR_PIXEL_DATA)  : bits[7:0] = unsigned 8-bit pixel (0..255)
+  * 0x1000_000C (ADDR_PIXEL_COUNT) : Current loaded pixel count (0..784)
+  * 0x1000_0010 (ADDR_RESULT)      : bits[3:0] = predicted digit class (0..9)
+
+================================================================================
+TEST CASE 1: END-TO-END SINGLE-IMAGE SOC INFERENCE (tb_case1_single_image.v)
+================================================================================
+- File          : E:\SOC_LAB\write_by_myself\tb_case1_single_image.v
+- Firmware Used : E:\SOC_LAB\write_by_myself\soc_gcc\build\bram_cpu.coe
+                  (compiled from start.S + main.c via build.sh)
+- Log File      : E:\SOC_LAB\final_project\final_project.sim\sim_1\behav\xsim\simulate_case1.log
+
+[Objective]
+Verify the complete hardware execution path from PicoRV32 instruction fetch in
+blk_mem_gen_0 -> interconnect -> mmio_mlp -> mlp_acc + blk_mem_gen_1 (weights)
+for a single 784-byte image stored at 0x0000_1000, matching all 10 logits
+bit-for-bit against the Python golden reference model.
+
+[Measured Simulation Results]
+- Reset Released          : 1,000 ns
+- RESULT_MAILBOX Init (0) : 2,205 ns
+- acc_clear Asserted      : 2,435 ns
+- acc_start Asserted      : 285,085 ns (after exactly 784 pixel_valid pulses)
+- MLP Inference Done      : 1,557,815 ns (MLP latency = 1,272,730 ns = 127,273 cycles)
+- Hardware Logits (logits_mem[0..9]) - 100% Bit-Exact Match with Golden Reference:
+    logit[0] =  -489666 (0xfff8873e)
+    logit[1] =   -21156 (0xffffad5c)
+    logit[2] =    89176 (0x00015c58)
+    logit[3] =   486813 (0x00076d9d)  <-- Max Logit (Predicted Class = 3, Expected = 3)
+    logit[4] = -1307134 (0xffec0e02)
+    logit[5] =   450273 (0x0006dee1)
+    logit[6] =  -509792 (0xfff838a0)
+    logit[7] =   281403 (0x00044b3b)
+    logit[8] =  -288184 (0xfffb9a48)
+    logit[9] =  -415446 (0xfff9a92a)
+- RESULT_MAILBOX (0x2000) : 3 (written at 1,558,235 ns)
+- DONE_MAILBOX   (0x2004) : 0x600D0001 (written at 1,558,425 ns)
+- CPU Trap Observed       : 0 (None)
+- Status                  : PASS
+
+================================================================================
+TEST CASE 2: BACK-TO-BACK 3-IMAGE CLASSIFICATION (tb_case2_multi_image.v)
+================================================================================
+- File          : E:\SOC_LAB\write_by_myself\tb_case2_multi_image.v
+- Firmware Used : E:\SOC_LAB\write_by_myself\soc_gcc\build_multi3\bram_cpu_multi3.coe
+                  (compiled from start.S + main_multi3.c + pack_multi3_coe.py
+                   via build_multi3.sh)
+- Input Images  :
+  * Image #0 (0x1000): E:\SOC_LAB\write_by_myself\image\img_106.jpg (28x28, Label = 3)
+  * Image #1 (0x1400): E:\SOC_LAB\write_by_myself\image\img_107.jpg (28x28, Label = 0)
+  * Image #2 (0x1800): E:\SOC_LAB\write_by_myself\image\img_114.jpg (28x28, Label = 7)
+- Log File      : E:\SOC_LAB\final_project\final_project.sim\sim_1\behav\xsim\simulate_case2.log
+
+[Objective]
+Verify that the SoC and MLP accelerator accurately classify 3 consecutive MNIST
+images back-to-back in a single simulation run, properly clearing pixel_count,
+accumulators, and done_latched via acc_clear (CONTROL = 2) between runs.
+
+[Measured Simulation Results]
+- Image #0 (img_106.jpg @ 0x1000):
+  * acc_clear      :     2,865 ns (prev px_count = 0 -> reset to 0)
+  * acc_start      :   285,325 ns (784 pixels streamed)
+  * mlp_acc_0.done : 1,558,055 ns
+  * Mailbox 0x2000 : Written at 1,558,475 ns -> Predicted = 3 (True Label = 3) [MATCH]
+  * Logits[0..9]   : [-272531, -191611, -120243, 255555, -230297,
+                       -44008, -320701,  -66942, -43494,  -56565]
+
+- Image #1 (img_107.jpg @ 0x1400):
+  * acc_clear      : 1,558,645 ns (prev px_count = 784 -> reset to 0)
+  * acc_start      : 1,841,105 ns (784 pixels streamed)
+  * mlp_acc_0.done : 3,113,835 ns
+  * Mailbox 0x2004 : Written at 3,114,255 ns -> Predicted = 0 (True Label = 0) [MATCH]
+  * Logits[0..9]   : [ 454166, -357486,  -47822, -201125, -490319,
+                      -148690,  -75725, -174840, -192754, -136764]
+
+- Image #2 (img_114.jpg @ 0x1800):
+  * acc_clear      : 3,114,425 ns (prev px_count = 784 -> reset to 0)
+  * acc_start      : 3,396,885 ns (784 pixels streamed)
+  * mlp_acc_0.done : 4,669,615 ns
+  * Mailbox 0x2008 : Written at 4,670,035 ns -> Predicted = 7 (True Label = 7) [MATCH]
+  * Logits[0..9]   : [-145830,  -30054,   40712,   10589, -168840,
+                      -211248, -266966,  175199,  -63000,  -21596]
+
+- DONE_MAILBOX (0x200C) : 0x600D0003 (written at 4,670,325 ns)
+- Total Pixels Streamed : 2,352 (3 x 784)
+- CPU Trap Observed     : 0 (None)
+- Status                : PASS (3/3 images predicted accurately: [3, 0, 7])
+
+================================================================================
+TEST CASE 3: MMIO HANDSHAKE & PROTOCOL GUARDRAILS (tb_case3_mmio_protocol.v)
+================================================================================
+- File     : E:\SOC_LAB\write_by_myself\tb_case3_mmio_protocol.v
+- DUT      : mmio_mlp (mmio_mlp_bao.v) + mlp_acc (mlp_acc_bao.v)
+- Log File : E:\SOC_LAB\final_project\final_project.sim\sim_1\behav\xsim\simulate_case3.log
+
+[Objective]
+Directly verify the MMIO bus handshake, status bits, pixel counter, mid-stream
+clear, premature-start prevention, and buffer-overflow protection in mmio_mlp.
+
+[Subtests & Measured Results]
+1. Subtest 3A (Reset State Verification):
+   - Read ADDR_STATUS (0x1000_0004)      -> Observed: 0x00000004 (Expected: 0x00000004) [PASS]
+   - Read ADDR_PIXEL_COUNT (0x1000_000C) -> Observed: 0          (Expected: 0)          [PASS]
+
+2. Subtest 3B (Partial Load & Premature Start Guardrail):
+   - Write 100 pixels to ADDR_PIXEL_DATA (0x1000_0008).
+   - Read ADDR_PIXEL_COUNT (0x1000_000C) -> Observed: 100        (Expected: 100)        [PASS]
+   - Attempt write ADDR_CONTROL = 1 (acc_start) while pixel_count == 100 (< 784):
+     Observed: req_ready = 0, acc_start = 0 (Hardware blocks premature start)           [PASS]
+
+3. Subtest 3C (Mid-Stream Clear Verification):
+   - Write ADDR_CONTROL = 2 (acc_clear) when pixel_count == 100.
+   - Read ADDR_PIXEL_COUNT (0x1000_000C) -> Observed: 0          (Expected: 0)          [PASS]
+
+4. Subtest 3D (Full 784-Pixel Load & 785th Pixel Overflow Guardrail):
+   - Write 784 pixels to ADDR_PIXEL_DATA (0x1000_0008).
+   - Read ADDR_PIXEL_COUNT (0x1000_000C) -> Observed: 784        (Expected: 784)        [PASS]
+   - Read ADDR_STATUS (0x1000_0004)      -> Observed: 0x00000008 (Expected: 0x00000008) [PASS]
+     (bit[3] input_full = 1, bit[2] can_accept_pixel = 0)
+   - Attempt 785th pixel write to ADDR_PIXEL_DATA (0x1000_0008):
+     Observed: req_ready = 0, pixel_valid = 0 (Hardware blocks pixel overflow)          [PASS]
+
+- Total Errors : 0
+- Sim Duration : 17,925 ns
+- Status       : PASS
+
+================================================================================
+HOW TO RUN VIA MAKEFILE
+================================================================================
+From PowerShell:
+  # Run all 3 test cases (builds firmware + runs xsim for TC3, TC1, TC2):
+  & "C:\Xilinx\Vivado\2022.2\gnuwin\bin\make.exe" -C "E:\SOC_LAB\write_by_myself" all
+
+  # Or run individual targets:
+  & "C:\Xilinx\Vivado\2022.2\gnuwin\bin\make.exe" -C "E:\SOC_LAB\write_by_myself" sim_case1
+  & "C:\Xilinx\Vivado\2022.2\gnuwin\bin\make.exe" -C "E:\SOC_LAB\write_by_myself" sim_case2
+  & "C:\Xilinx\Vivado\2022.2\gnuwin\bin\make.exe" -C "E:\SOC_LAB\write_by_myself" sim_case3
+================================================================================
