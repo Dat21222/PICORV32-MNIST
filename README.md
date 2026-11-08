@@ -10,6 +10,10 @@ The system pairs a 32-bit **PicoRV32 RISC-V** processor with a custom **pipeline
 
 ![System Architecture Diagram](docs/system_diagram.png)
 
+## Block design in Vivado
+
+![Full block design](docs/block_design.jpg)
+
 ### Execution Flow
 1. **Boot**: PicoRV32 boots bare-metal C firmware from CPU BRAM (`0x0000_0000`).
 2. **Transfer**: CPU reads a 784-byte grayscale image ($28 \times 28$) from memory and streams it to the accelerator via MMIO.
