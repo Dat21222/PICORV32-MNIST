@@ -82,21 +82,51 @@ picorv32_mlp_soc/
 
 ---
 
-## Quickstart
+## Execution Guide (End-to-End)
 
-### 1. Trained model MLP
+### Prerequisites
+- **Vivado**: Xilinx **Vivado 2022.2** (Simulator `xsim`, Block Design / IP Integrator, Synthesis & Implementation)
+- **Target FPGA**: Xilinx Zynq-7000 (`xc7z020clg484-1` / `xc7z020clg400-1`)
+- **Firmware Toolchain (Ubuntu / WSL)**:
+  ```bash
+  sudo apt update && sudo apt install gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf python3 python3-pil
+  ```
 
-[kaggle training model](https://www.kaggle.com/code/tdngvntin/training-mlp)
+### Step 1: Train & Quantize MLP Model
+- Pre-trained notebook: [kaggle training model](https://www.kaggle.com/code/tdngvntin/training-mlp)
+- `model/mlp.py` quantizes weights/biases into fixed-point Q15/Q30/Q31 and exports `model/mlp_bram_init.coe` (for Vivado Weight ROM) and golden reference logits.
 
-### 2. Build Firmware (Ubuntu / WSL)
-Requires `gcc-riscv64-unknown-elf` or `gcc-riscv32-unknown-elf`:
+### Step 2: Build RISC-V Firmware & Pack CPU BRAM
+Compile `start.S` + `main.c` (`-march=rv32i -mabi=ilp32`) and pack the ELF + 784-byte image into a 64 KiB `.coe` / `.mem` / `.mif`:
 ```bash
 cd firmware
+# Single-image firmware (generates build/bram_cpu.coe)
 bash build.sh ../data/images/img_106.jpg
-```
 
-### 3. Run Simulation (Vivado xsim)
-```bash
-# Run standalone MMIO & accelerator testbench
-make sim_case3
+# Or 3-image continuous firmware (generates build_multi3/bram_cpu_multi3.coe)
+bash build_multi3.sh
 ```
+*(Pre-compiled files are already available in `firmware/prebuilt/`.)*
+
+### Step 3: Vivado 2022.2 Block Design Setup
+1. Create a Vivado 2022.2 project targeting `xc7z020` and add all sources from `rtl/`.
+2. In Block Design (`final_wrapper`), instantiate `processing_system7_0` (100 MHz `FCLK_CLK0`), `picorv32_wrapper`, `interconnect`, `bram_controller`, `mmio_mlp`, and `mlp_acc`.
+3. Configure **Block Memory Generator**:
+   - `blk_mem_gen_0` (CPU BRAM, 64 KiB, 1-cycle latency): Load `firmware/prebuilt/bram_cpu.coe`.
+   - `blk_mem_gen_1` (Weight ROM, 50 KiB): Load `model/mlp_bram_init.coe`.
+
+### Step 4: Run Verification Testbenches
+
+The verification strategy progresses from **unit-level MMIO protocol** to **full-SoC end-to-end execution**:
+
+1. **Test Case 3 — MMIO & Accelerator Protocol (`tb/tb_case3_mmio_protocol.v`)**
+   - **Approach**: Standalone testbench directly driving `mmio_mlp` + `mlp_acc` (bypassing CPU/BRAM) to validate bus handshakes, 784-pixel streaming, `acc_clear` reset, `acc_start`, and `done` flags.
+   - **Run**:
+     ```bash
+     make sim_case3
+     ```
+2. **Test Case 1 — Full SoC Single Image (`tb/tb_case1_single_image.v`)**
+   - **Approach**: Simulates the full `final_wrapper_wrapper` Block Design. PicoRV32 boots from `blk_mem_gen_0` (`bram_cpu.coe`), streams 784 pixels to `mmio_mlp`, polls completion, and writes `RESULT_MAILBOX` (`0x2000`) & `DONE_MAILBOX` (`0x2004 = 0x600D0001`). The testbench compares all 10 hardware logits bit-for-bit against the Python golden model.
+   - **Run**: Add `tb/tb_case1_single_image.v` as top simulation source in Vivado 2022.2 (with `final_wrapper_blk_mem_gen_0_0.mif` from `bram_cpu.coe`) and run Behavioral Simulation (`~1.56 ms` sim time).
+3. **Test Case 2 — Full SoC Multi-Image (`tb/tb_case2_multi_image.v`)**
+   - **Approach**: Loads `bram_cpu_multi3.coe` containing 3 consecutive images (`0x1000`, `0x1400`, `0x1800`) to verify back-to-back classification (`[3, 0, 7]`) and proper `acc_clear` state reset between runs (`~4.67 ms` sim time).
